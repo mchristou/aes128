@@ -176,6 +176,7 @@ mod tests {
                           QzwqM2WkhPaBL9lAuBH3CL5NXK2";
 
         let aes = Aes128::new_with_nonce(key, nonce).unwrap();
+
         let mut encrypted_data = smallvec![];
         aes.encrypt(plain_text.as_bytes(), &mut encrypted_data)
             .unwrap();
