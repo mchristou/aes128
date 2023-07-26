@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit, OsRng},
     aes::cipher::typenum,
     Aes128Gcm, Key, KeySizeUser, Nonce,
 };
@@ -25,6 +25,19 @@ impl Aes128 {
 
         let cipher = Aes128Gcm::new(key);
         let nonce = Aes128Gcm::generate_nonce(&mut OsRng);
+
+        Ok(Self { cipher, nonce })
+    }
+
+    pub fn new_with_nonce(key: &[u8], nonce: &[u8]) -> Result<Self> {
+        if key.len() < Aes128Gcm::key_size() {
+            return Err(Error::InvalidKeyLength(key.len()));
+        }
+
+        let key = Key::<Aes128Gcm>::from_slice(key);
+        let nonce: GenericArray<_, typenum::U12> = GenericArray::from_slice(nonce).to_owned();
+
+        let cipher = Aes128Gcm::new(key);
 
         Ok(Self { cipher, nonce })
     }
@@ -72,7 +85,7 @@ mod tests {
     use smallvec::smallvec;
 
     #[test]
-    fn simple() {
+    fn input_less_than_255() {
         let key: &[u8; 16] = &[
             0x4d, 0x79, 0x53, 0x65, 0x63, 0x72, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x00, 0x00, 0x00,
             0x00, 0x00,
@@ -93,7 +106,7 @@ mod tests {
     }
 
     #[test]
-    fn random_input() {
+    fn random_input_less_than_255() {
         let key: &[u8; 16] = &[
             0x4d, 0x79, 0x53, 0x65, 0x63, 0x72, 0x65, 0x74, 0x4b, 0x65, 0x79, 0x00, 0x00, 0x00,
             0x00, 0x00,
@@ -114,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn input_length_over_255() {
+    fn input_over_255() {
         let key: &[u8; 16] = &[
             0xC9, 0x10, 0xC4, 0x12, 0x11, 0xE5, 0x19, 0x80, 0xBA, 0x1E, 0xA8, 0x8B, 0x14, 0x76,
             0xEA, 0xEB,
@@ -131,6 +144,38 @@ mod tests {
                           786z92o9uvNLKSOh9nljcwYV9SHB
                           QzwqM2WkhPaBL9lAuBH3CL5NXK2";
 
+        let mut encrypted_data = smallvec![];
+        aes.encrypt(plain_text.as_bytes(), &mut encrypted_data)
+            .unwrap();
+
+        let mut decrypted_data = smallvec![];
+        aes.decrypt(encrypted_data.as_slice(), &mut decrypted_data)
+            .unwrap();
+
+        assert_eq!(plain_text.as_bytes(), decrypted_data.as_slice());
+    }
+
+    #[test]
+    fn new_with_nonce() {
+        let key: &[u8; 16] = &[
+            0xC9, 0x10, 0xC4, 0x12, 0x11, 0xE5, 0x19, 0x80, 0xBA, 0x1E, 0xA8, 0x8B, 0x14, 0x76,
+            0xEA, 0xEB,
+        ];
+        let nonce: &[u8; 12] = &[
+            0xbb, 0xda, 0xfd, 0x67, 0x70, 0x20, 0xfc, 0x80, 0xb6, 0xbf, 0xe2, 0xff,
+        ];
+
+        let plain_text = "Hg0L4uA24IgpY2XMhnu9FJ61wThB
+                          cRKan04fF0XyxbJuuwlyTwbXNh4G
+                          qQrXbvGvO70ePMBmovnVZnVULE5T
+                          tHz16Jv7VSaM1gcKm50BOpDD4gXZ
+                          OwWCU1boJHg8uRweqwoQc8RQg5F6
+                          I4OjNF4sZYdXLTGjXj8oRD1daQye
+                          HqCNbDty7DheySHMyD3XOhr8W7jp
+                          786z92o9uvNLKSOh9nljcwYV9SHB
+                          QzwqM2WkhPaBL9lAuBH3CL5NXK2";
+
+        let aes = Aes128::new_with_nonce(key, nonce).unwrap();
         let mut encrypted_data = smallvec![];
         aes.encrypt(plain_text.as_bytes(), &mut encrypted_data)
             .unwrap();
